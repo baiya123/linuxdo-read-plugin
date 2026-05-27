@@ -8,6 +8,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @run-at       document-idle
+// @downloadURL  https://raw.githubusercontent.com/baiya123/linuxdo-read-plugin/main/linuxdo-read-only-browse.user.js
+// @updateURL    https://raw.githubusercontent.com/baiya123/linuxdo-read-plugin/main/linuxdo-read-only-browse.user.js
 // ==/UserScript==
 
 (function () {

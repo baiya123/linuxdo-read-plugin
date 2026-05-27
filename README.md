@@ -23,9 +23,10 @@
 ## 安装
 
 1. 安装用户脚本管理器，例如 Tampermonkey、Violentmonkey 或 Greasemonkey。
-2. 新建用户脚本。
-3. 将 [linuxdo-read-only-browse.user.js](./linuxdo-read-only-browse.user.js) 的内容复制进去并保存。
-4. 打开 `https://linux.do/latest`，页面右下角会出现控制面板。
+2. 打开 GitHub Raw 安装地址：[linuxdo-read-only-browse.user.js](https://raw.githubusercontent.com/baiya123/linuxdo-read-plugin/main/linuxdo-read-only-browse.user.js)。
+3. 用户脚本管理器弹出安装页后点击安装。
+4. 后续脚本管理器会通过脚本头部的 `@downloadURL` 和 `@updateURL` 从 GitHub Raw 检查更新。
+5. 打开 `https://linux.do/latest`，页面右下角会出现控制面板。
 
 ## 使用
 
