@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.6
+// @version      0.2.7
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -410,6 +410,16 @@
     return { count, target: button || counter || topicMapLikes || null, button, alreadyLiked };
   }
 
+  async function waitForMainPostLikeInfo() {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const info = getMainPostLikeInfo();
+      if (info && (info.button || info.target || info.count > 0)) return info;
+      await sleep(500);
+    }
+
+    return getMainPostLikeInfo();
+  }
+
   function clearLikeHighlight() {
     document.querySelectorAll(".ldo-roh-like-highlight").forEach((element) => {
       element.classList.remove("ldo-roh-like-highlight");
@@ -437,7 +447,7 @@
       return;
     }
 
-    const info = getMainPostLikeInfo();
+    const info = await waitForMainPostLikeInfo();
     if (!info) {
       setLikeHint("未找到主帖点赞信息");
       return;
@@ -593,6 +603,7 @@
   async function main() {
     setupPanel();
     const state = loadState();
+    await updateLikeAssist();
     if (!state.enabled) return;
 
     if (isTopicPage()) {
