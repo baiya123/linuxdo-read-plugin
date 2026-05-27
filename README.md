@@ -20,6 +20,10 @@
 - 可开启辅助自动点赞：脚本运行中且主帖点赞数达到阈值时，自动点击主帖点赞按钮
 - 兼容没有反应计数块、但在主帖统计区显示点赞数的帖子
 
+## 界面预览
+
+![LINUX DO 只读浏览面板](./assets/panel-preview.svg)
+
 ## 安装
 
 1. 安装用户脚本管理器，例如 Tampermonkey、Violentmonkey 或 Greasemonkey。
