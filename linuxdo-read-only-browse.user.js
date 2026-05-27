@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.4
-// @description  Read latest LINUX DO topics with visible, manual controls and manual like hints. No automatic likes, comments, bookmarks, or other interactions.
+// @version      0.2.5
+// @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
 // @grant        GM_getValue
@@ -27,6 +27,8 @@
     topicsReadInBatch: 0,
     panelCollapsed: false,
     mainPostLikeThreshold: 0,
+    autoLikeMainPost: false,
+    autoLiked: [],
     idleCycles: 0,
     visited: [],
   };
@@ -169,6 +171,9 @@
         <label>主帖赞阈值
           <input type="number" min="0" max="1000000" step="1" data-role="like-threshold">
         </label>
+        <label>自动点赞
+          <input type="checkbox" data-role="auto-like">
+        </label>
         <div class="ldo-roh-row">
           <button type="button" data-role="toggle"></button>
           <button type="button" data-role="reset">清记录</button>
@@ -251,6 +256,10 @@
         color: #111;
         background: #fff;
       }
+      #linuxdo-read-only-helper input[type="checkbox"] {
+        width: auto;
+        transform: scale(1.15);
+      }
       #linuxdo-read-only-helper .ldo-roh-row {
         display: flex;
         gap: 8px;
@@ -314,6 +323,7 @@
     panel.querySelector('[data-role="break-after"]').value = state.breakAfterTopics;
     panel.querySelector('[data-role="long-break"]').value = Math.round(state.longBreakMs / 1000);
     panel.querySelector('[data-role="like-threshold"]').value = state.mainPostLikeThreshold;
+    panel.querySelector('[data-role="auto-like"]').checked = state.autoLikeMainPost;
   }
 
   function saveInputsToState() {
@@ -337,11 +347,21 @@
       1000000,
       DEFAULTS.mainPostLikeThreshold
     );
+    const autoLikeMainPost = panel.querySelector('[data-role="auto-like"]').checked;
 
     if (minReadMs > maxReadMs) [minReadMs, maxReadMs] = [maxReadMs, minReadMs];
     if (minPauseMs > maxPauseMs) [minPauseMs, maxPauseMs] = [maxPauseMs, minPauseMs];
 
-    saveState({ minReadMs, maxReadMs, minPauseMs, maxPauseMs, breakAfterTopics, longBreakMs, mainPostLikeThreshold });
+    saveState({
+      minReadMs,
+      maxReadMs,
+      minPauseMs,
+      maxPauseMs,
+      breakAfterTopics,
+      longBreakMs,
+      mainPostLikeThreshold,
+      autoLikeMainPost,
+    });
     syncInputsFromState();
   }
 
@@ -357,33 +377,31 @@
     const post = getMainPostElement();
     if (!post) return null;
 
-    const elements = Array.from(
-      post.querySelectorAll(
-        [
-          ".post-controls .like-count",
-          ".post-controls .toggle-like",
-          ".post-controls .like-button",
-          '.post-controls button[title*="赞"]',
-          '.post-controls button[aria-label*="赞"]',
-          '.post-controls button[title*="like" i]',
-          '.post-controls button[aria-label*="like" i]',
-          ".post-info.likes",
-        ].join(",")
-      )
+    const counter = post.querySelector(
+      ".post-controls .discourse-reactions-counter .reactions-counter, .post-controls .discourse-reactions-counter"
+    );
+    const button = post.querySelector(
+      [
+        ".post-controls button.btn-toggle-reaction-like.reaction-button",
+        '.post-controls button[title*="点赞"]',
+        '.post-controls button[aria-label*="点赞"]',
+        '.post-controls button[title*="like" i]',
+        '.post-controls button[aria-label*="like" i]',
+      ].join(",")
     );
 
-    let count = 0;
-    let target = null;
-    elements.forEach((element) => {
-      const text = [element.textContent, element.getAttribute("title"), element.getAttribute("aria-label")]
-        .filter(Boolean)
-        .join(" ");
-      const parsed = parseCompactNumber(text);
-      if (parsed !== null && parsed >= count) count = parsed;
-      if (!target && /赞|like/i.test(text)) target = element;
-    });
+    const counterText = counter
+      ? [counter.textContent, counter.getAttribute("aria-label"), counter.getAttribute("title")].filter(Boolean).join(" ")
+      : "";
+    const parsed = parseCompactNumber(counterText);
+    const buttonText = button
+      ? [button.textContent, button.getAttribute("aria-label"), button.getAttribute("title"), button.className]
+          .filter(Boolean)
+          .join(" ")
+      : "";
+    const alreadyLiked = Boolean(button && (/取消|已赞|liked/i.test(buttonText) || button.querySelector('use[href="#heart"]')));
 
-    return { count, target: target || elements[0] || null };
+    return { count: parsed || 0, target: button || counter || null, button, alreadyLiked };
   }
 
   function clearLikeHighlight() {
@@ -392,7 +410,20 @@
     });
   }
 
-  function updateManualLikeHint() {
+  function rememberAutoLiked(url) {
+    const state = loadState();
+    const normalized = normalizeTopicUrl(url);
+    if (!normalized) return;
+    const autoLiked = [normalized, ...(state.autoLiked || []).filter((item) => item !== normalized)].slice(0, 200);
+    saveState({ autoLiked });
+  }
+
+  function wasAutoLiked(url) {
+    const normalized = normalizeTopicUrl(url);
+    return Boolean(normalized && (loadState().autoLiked || []).includes(normalized));
+  }
+
+  async function updateLikeAssist() {
     clearLikeHighlight();
     const state = loadState();
     if (!isTopicPage() || state.mainPostLikeThreshold <= 0) {
@@ -408,6 +439,27 @@
 
     if (info.count >= state.mainPostLikeThreshold) {
       if (info.target) info.target.classList.add("ldo-roh-like-highlight");
+      if (state.autoLikeMainPost && state.enabled) {
+        if (info.alreadyLiked || wasAutoLiked(location.href)) {
+          setLikeHint(`主帖 ${info.count} 赞，已点赞`);
+          return;
+        }
+
+        if (info.button) {
+          setLikeHint(`主帖 ${info.count} 赞，自动点赞中`);
+          await sleep(randomInt(700, 1800));
+          const latest = loadState();
+          if (!latest.enabled || !latest.autoLikeMainPost || !isTopicPage() || !info.button.isConnected) return;
+          info.button.click();
+          rememberAutoLiked(location.href);
+          setLikeHint(`主帖 ${info.count} 赞，已自动点赞`);
+          return;
+        }
+
+        setLikeHint(`主帖 ${info.count} 赞，未找到可点击点赞按钮`);
+        return;
+      }
+
       setLikeHint(`主帖 ${info.count} 赞，达到阈值，可手动点赞`);
       return;
     }
@@ -439,7 +491,7 @@
     });
 
     reset.addEventListener("click", () => {
-      saveState({ visited: [], idleCycles: 0, topicsReadInBatch: 0 });
+      saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0 });
       setStatus("已清空浏览记录");
     });
 
@@ -447,7 +499,7 @@
       input.addEventListener("change", () => {
         saveInputsToState();
         setStatus(loadState().enabled ? "设置已保存，继续运行" : "设置已保存");
-        updateManualLikeHint();
+        updateLikeAssist();
       });
     });
 
@@ -476,7 +528,7 @@
     rememberVisited(location.href);
     saveState({ idleCycles: 0 });
     const state = loadState();
-    updateManualLikeHint();
+    await updateLikeAssist();
     setStatus("停留阅读中");
     await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
     await scrollTopicLikeReading();
