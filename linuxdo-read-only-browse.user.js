@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.3
-// @description  Read latest LINUX DO topics with visible, manual controls. No likes, comments, bookmarks, or other interactions.
+// @version      0.2.4
+// @description  Read latest LINUX DO topics with visible, manual controls and manual like hints. No automatic likes, comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
 // @grant        GM_getValue
@@ -26,6 +26,7 @@
     longBreakMs: 300000,
     topicsReadInBatch: 0,
     panelCollapsed: false,
+    mainPostLikeThreshold: 0,
     idleCycles: 0,
     visited: [],
   };
@@ -66,6 +67,22 @@
 
   function positiveInt(value, min, max, fallback) {
     return Math.round(clampNumber(value, min, max, fallback));
+  }
+
+  function parseCompactNumber(text) {
+    const match = String(text || "")
+      .replace(/,/g, "")
+      .match(/(\d+(?:\.\d+)?)\s*([kKmM万]?)/);
+    if (!match) return null;
+
+    const number = Number(match[1]);
+    if (!Number.isFinite(number)) return null;
+
+    const unit = match[2].toLowerCase();
+    if (unit === "k") return Math.round(number * 1000);
+    if (unit === "m") return Math.round(number * 1000000);
+    if (unit === "万") return Math.round(number * 10000);
+    return Math.round(number);
   }
 
   function normalizeTopicUrl(url) {
@@ -128,6 +145,7 @@
       </div>
       <div class="ldo-roh-content">
         <div class="ldo-roh-status" data-role="status">待机</div>
+        <div class="ldo-roh-like-hint" data-role="like-hint"></div>
         <label>阅读秒数
           <span>
             <input type="number" min="10" max="3600" step="5" data-role="min-read">
@@ -147,6 +165,9 @@
         </label>
         <label>休息秒数
           <input type="number" min="10" max="86400" step="10" data-role="long-break">
+        </label>
+        <label>主帖赞阈值
+          <input type="number" min="0" max="1000000" step="1" data-role="like-threshold">
         </label>
         <div class="ldo-roh-row">
           <button type="button" data-role="toggle"></button>
@@ -202,6 +223,17 @@
         opacity: 0.88;
         margin-bottom: 10px;
       }
+      #linuxdo-read-only-helper .ldo-roh-like-hint {
+        display: none;
+        margin-bottom: 10px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        background: rgba(255, 209, 102, 0.16);
+        color: #ffe7a3;
+      }
+      #linuxdo-read-only-helper .ldo-roh-like-hint:not(:empty) {
+        display: block;
+      }
       #linuxdo-read-only-helper label {
         display: flex;
         align-items: center;
@@ -236,6 +268,12 @@
       #linuxdo-read-only-helper button[data-role="toggle"] {
         background: #9ee493;
       }
+      .ldo-roh-like-highlight {
+        outline: 3px solid #ffd166 !important;
+        outline-offset: 3px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.22) !important;
+      }
     `;
 
     document.documentElement.appendChild(style);
@@ -261,6 +299,11 @@
     toggle.style.background = state.enabled ? "#ffb3b3" : "#9ee493";
   }
 
+  function setLikeHint(text) {
+    const hint = buildPanel().querySelector('[data-role="like-hint"]');
+    hint.textContent = text;
+  }
+
   function syncInputsFromState() {
     const panel = buildPanel();
     const state = loadState();
@@ -270,6 +313,7 @@
     panel.querySelector('[data-role="max-pause"]').value = Math.round(state.maxPauseMs / 1000);
     panel.querySelector('[data-role="break-after"]').value = state.breakAfterTopics;
     panel.querySelector('[data-role="long-break"]').value = Math.round(state.longBreakMs / 1000);
+    panel.querySelector('[data-role="like-threshold"]').value = state.mainPostLikeThreshold;
   }
 
   function saveInputsToState() {
@@ -287,12 +331,88 @@
     const longBreakMs =
       positiveInt(panel.querySelector('[data-role="long-break"]').value, 10, 86400, DEFAULTS.longBreakMs / 1000) *
       1000;
+    const mainPostLikeThreshold = positiveInt(
+      panel.querySelector('[data-role="like-threshold"]').value,
+      0,
+      1000000,
+      DEFAULTS.mainPostLikeThreshold
+    );
 
     if (minReadMs > maxReadMs) [minReadMs, maxReadMs] = [maxReadMs, minReadMs];
     if (minPauseMs > maxPauseMs) [minPauseMs, maxPauseMs] = [maxPauseMs, minPauseMs];
 
-    saveState({ minReadMs, maxReadMs, minPauseMs, maxPauseMs, breakAfterTopics, longBreakMs });
+    saveState({ minReadMs, maxReadMs, minPauseMs, maxPauseMs, breakAfterTopics, longBreakMs, mainPostLikeThreshold });
     syncInputsFromState();
+  }
+
+  function getMainPostElement() {
+    return (
+      document.querySelector('[data-post-number="1"]') ||
+      document.querySelector("#post_1") ||
+      document.querySelector(".topic-post")
+    );
+  }
+
+  function getMainPostLikeInfo() {
+    const post = getMainPostElement();
+    if (!post) return null;
+
+    const elements = Array.from(
+      post.querySelectorAll(
+        [
+          ".post-controls .like-count",
+          ".post-controls .toggle-like",
+          ".post-controls .like-button",
+          '.post-controls button[title*="赞"]',
+          '.post-controls button[aria-label*="赞"]',
+          '.post-controls button[title*="like" i]',
+          '.post-controls button[aria-label*="like" i]',
+          ".post-info.likes",
+        ].join(",")
+      )
+    );
+
+    let count = 0;
+    let target = null;
+    elements.forEach((element) => {
+      const text = [element.textContent, element.getAttribute("title"), element.getAttribute("aria-label")]
+        .filter(Boolean)
+        .join(" ");
+      const parsed = parseCompactNumber(text);
+      if (parsed !== null && parsed >= count) count = parsed;
+      if (!target && /赞|like/i.test(text)) target = element;
+    });
+
+    return { count, target: target || elements[0] || null };
+  }
+
+  function clearLikeHighlight() {
+    document.querySelectorAll(".ldo-roh-like-highlight").forEach((element) => {
+      element.classList.remove("ldo-roh-like-highlight");
+    });
+  }
+
+  function updateManualLikeHint() {
+    clearLikeHighlight();
+    const state = loadState();
+    if (!isTopicPage() || state.mainPostLikeThreshold <= 0) {
+      setLikeHint("");
+      return;
+    }
+
+    const info = getMainPostLikeInfo();
+    if (!info) {
+      setLikeHint("未找到主帖点赞信息");
+      return;
+    }
+
+    if (info.count >= state.mainPostLikeThreshold) {
+      if (info.target) info.target.classList.add("ldo-roh-like-highlight");
+      setLikeHint(`主帖 ${info.count} 赞，达到阈值，可手动点赞`);
+      return;
+    }
+
+    setLikeHint(`主帖 ${info.count} 赞，未达到阈值`);
   }
 
   function setupPanel() {
@@ -327,6 +447,7 @@
       input.addEventListener("change", () => {
         saveInputsToState();
         setStatus(loadState().enabled ? "设置已保存，继续运行" : "设置已保存");
+        updateManualLikeHint();
       });
     });
 
@@ -355,6 +476,7 @@
     rememberVisited(location.href);
     saveState({ idleCycles: 0 });
     const state = loadState();
+    updateManualLikeHint();
     setStatus("停留阅读中");
     await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
     await scrollTopicLikeReading();
