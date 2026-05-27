@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.1
+// @version      0.2.2
 // @description  Read latest LINUX DO topics with visible, manual controls. No likes, comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -22,6 +22,9 @@
     maxPauseMs: 14000,
     scrollStepsMin: 3,
     scrollStepsMax: 8,
+    breakAfterTopics: 10,
+    longBreakMs: 300000,
+    topicsReadInBatch: 0,
     idleCycles: 0,
     visited: [],
   };
@@ -58,6 +61,10 @@
 
   function secondsToMs(value, fallbackMs) {
     return clampNumber(value, 3, 3600, fallbackMs / 1000) * 1000;
+  }
+
+  function positiveInt(value, min, max, fallback) {
+    return Math.round(clampNumber(value, min, max, fallback));
   }
 
   function normalizeTopicUrl(url) {
@@ -129,6 +136,12 @@
           -
           <input type="number" min="3" max="600" step="1" data-role="max-pause">
         </span>
+      </label>
+      <label>读几篇休息
+        <input type="number" min="1" max="200" step="1" data-role="break-after">
+      </label>
+      <label>休息秒数
+        <input type="number" min="10" max="86400" step="10" data-role="long-break">
       </label>
       <div class="ldo-roh-row">
         <button type="button" data-role="toggle"></button>
@@ -220,6 +233,8 @@
     panel.querySelector('[data-role="max-read"]').value = Math.round(state.maxReadMs / 1000);
     panel.querySelector('[data-role="min-pause"]').value = Math.round(state.minPauseMs / 1000);
     panel.querySelector('[data-role="max-pause"]').value = Math.round(state.maxPauseMs / 1000);
+    panel.querySelector('[data-role="break-after"]').value = state.breakAfterTopics;
+    panel.querySelector('[data-role="long-break"]').value = Math.round(state.longBreakMs / 1000);
   }
 
   function saveInputsToState() {
@@ -228,11 +243,20 @@
     let maxReadMs = secondsToMs(panel.querySelector('[data-role="max-read"]').value, DEFAULTS.maxReadMs);
     let minPauseMs = secondsToMs(panel.querySelector('[data-role="min-pause"]').value, DEFAULTS.minPauseMs);
     let maxPauseMs = secondsToMs(panel.querySelector('[data-role="max-pause"]').value, DEFAULTS.maxPauseMs);
+    const breakAfterTopics = positiveInt(
+      panel.querySelector('[data-role="break-after"]').value,
+      1,
+      200,
+      DEFAULTS.breakAfterTopics
+    );
+    const longBreakMs =
+      positiveInt(panel.querySelector('[data-role="long-break"]').value, 10, 86400, DEFAULTS.longBreakMs / 1000) *
+      1000;
 
     if (minReadMs > maxReadMs) [minReadMs, maxReadMs] = [maxReadMs, minReadMs];
     if (minPauseMs > maxPauseMs) [minPauseMs, maxPauseMs] = [maxPauseMs, minPauseMs];
 
-    saveState({ minReadMs, maxReadMs, minPauseMs, maxPauseMs });
+    saveState({ minReadMs, maxReadMs, minPauseMs, maxPauseMs, breakAfterTopics, longBreakMs });
     syncInputsFromState();
   }
 
@@ -247,13 +271,13 @@
     toggle.addEventListener("click", () => {
       const state = loadState();
       saveInputsToState();
-      saveState({ enabled: !state.enabled, idleCycles: 0 });
+      saveState({ enabled: !state.enabled, idleCycles: 0, topicsReadInBatch: 0 });
       setStatus(!state.enabled ? "已启动，准备浏览" : "已停止");
       window.setTimeout(() => location.reload(), 600);
     });
 
     reset.addEventListener("click", () => {
-      saveState({ visited: [], idleCycles: 0 });
+      saveState({ visited: [], idleCycles: 0, topicsReadInBatch: 0 });
       setStatus("已清空浏览记录");
     });
 
@@ -294,6 +318,17 @@
     await scrollTopicLikeReading();
 
     if (loadState().enabled) {
+      const nextState = loadState();
+      const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
+      saveState({ topicsReadInBatch });
+
+      if (topicsReadInBatch >= nextState.breakAfterTopics) {
+        setStatus(`已读 ${topicsReadInBatch} 篇，休息中`);
+        await sleep(nextState.longBreakMs);
+        if (!loadState().enabled) return;
+        saveState({ topicsReadInBatch: 0 });
+      }
+
       setStatus("返回最新列表");
       location.href = "https://linux.do/latest";
     }
