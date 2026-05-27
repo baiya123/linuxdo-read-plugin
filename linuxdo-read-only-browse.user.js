@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.9
+// @version      0.3.0
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -256,20 +256,55 @@
         margin-bottom: 6px;
       }
       #linuxdo-read-only-helper .ldo-roh-collapse {
+        position: relative;
         flex: none;
         padding: 4px 8px;
         font-size: 12px;
+        min-width: 44px;
       }
       #linuxdo-read-only-helper.ldo-roh-collapsed {
-        width: auto;
-        padding: 8px;
+        width: 58px;
+        height: 58px;
+        padding: 0;
+        border-radius: 50%;
+        background: rgba(32, 34, 37, 0.96);
       }
       #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-title,
       #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-content {
         display: none;
       }
       #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header {
+        width: 100%;
+        height: 100%;
         margin-bottom: 0;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-collapse {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border-radius: 50%;
+        background: #f5f5f5 url("https://linux.do/favicon.ico") center / 34px 34px no-repeat;
+        color: transparent;
+        font-size: 0;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-collapse::after {
+        content: "展开";
+        position: absolute;
+        left: 50%;
+        bottom: -22px;
+        transform: translateX(-50%);
+        min-width: 42px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        background: rgba(32, 34, 37, 0.9);
+        color: #fff;
+        font-size: 12px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed:hover .ldo-roh-collapse::after {
+        opacity: 1;
       }
       #linuxdo-read-only-helper .ldo-roh-status {
         min-height: 22px;
