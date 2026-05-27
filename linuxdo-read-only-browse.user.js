@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.5
+// @version      0.2.6
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -380,6 +380,7 @@
     const counter = post.querySelector(
       ".post-controls .discourse-reactions-counter .reactions-counter, .post-controls .discourse-reactions-counter"
     );
+    const topicMapLikes = post.querySelector(".topic-map__likes-trigger .number");
     const button = post.querySelector(
       [
         ".post-controls button.btn-toggle-reaction-like.reaction-button",
@@ -393,7 +394,10 @@
     const counterText = counter
       ? [counter.textContent, counter.getAttribute("aria-label"), counter.getAttribute("title")].filter(Boolean).join(" ")
       : "";
+    const topicMapLikesText = topicMapLikes ? topicMapLikes.textContent : "";
     const parsed = parseCompactNumber(counterText);
+    const topicMapParsed = parseCompactNumber(topicMapLikesText);
+    const count = parsed ?? topicMapParsed ?? 0;
     const buttonText = button
       ? [button.textContent, button.getAttribute("aria-label"), button.getAttribute("title"), button.className]
           .filter(Boolean)
@@ -401,7 +405,7 @@
       : "";
     const alreadyLiked = Boolean(button && (/取消|已赞|liked/i.test(buttonText) || button.querySelector('use[href="#heart"]')));
 
-    return { count: parsed || 0, target: button || counter || null, button, alreadyLiked };
+    return { count, target: button || counter || topicMapLikes || null, button, alreadyLiked };
   }
 
   function clearLikeHighlight() {
