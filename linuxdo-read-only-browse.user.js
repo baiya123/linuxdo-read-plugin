@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.8
+// @version      0.2.9
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -33,6 +33,8 @@
     autoLiked: [],
     dailyReadDate: "",
     dailyReadCount: 0,
+    dailyLikeDate: "",
+    dailyLikeCount: 0,
     idleCycles: 0,
     visited: [],
   };
@@ -162,6 +164,23 @@
     saveState({ dailyReadDate: todayKey(), dailyReadCount: 0 });
   }
 
+  function getDailyLikeCount() {
+    const state = loadState();
+    return state.dailyLikeDate === todayKey() ? state.dailyLikeCount || 0 : 0;
+  }
+
+  function incrementDailyLikeCount() {
+    const state = loadState();
+    const today = todayKey();
+    const dailyLikeCount = state.dailyLikeDate === today ? (state.dailyLikeCount || 0) + 1 : 1;
+    saveState({ dailyLikeDate: today, dailyLikeCount });
+    return dailyLikeCount;
+  }
+
+  function resetDailyLikeCount() {
+    saveState({ dailyLikeDate: todayKey(), dailyLikeCount: 0 });
+  }
+
   function buildPanel() {
     const existing = document.getElementById("linuxdo-read-only-helper");
     if (existing) return existing;
@@ -175,7 +194,7 @@
       </div>
       <div class="ldo-roh-content">
         <div class="ldo-roh-status" data-role="status">待机</div>
-        <div class="ldo-roh-daily" data-role="daily-count">今日已读 0 篇</div>
+        <div class="ldo-roh-daily" data-role="daily-count">今日已读 0 篇 / 今日点赞 0 次</div>
         <div class="ldo-roh-like-hint" data-role="like-hint"></div>
         <label>阅读秒数
           <span>
@@ -332,7 +351,9 @@
 
   function syncDailyReadCount() {
     const panel = buildPanel();
-    panel.querySelector('[data-role="daily-count"]').textContent = `今日已读 ${getDailyReadCount()} 篇`;
+    panel.querySelector(
+      '[data-role="daily-count"]'
+    ).textContent = `今日已读 ${getDailyReadCount()} 篇 / 今日点赞 ${getDailyLikeCount()} 次`;
   }
 
   function setStatus(text) {
@@ -505,6 +526,8 @@
           if (!latest.enabled || !latest.autoLikeMainPost || !isTopicPage() || !info.button.isConnected) return;
           info.button.click();
           rememberAutoLiked(location.href);
+          incrementDailyLikeCount();
+          syncDailyReadCount();
           setLikeHint(`主帖 ${info.count} 赞，已自动点赞`);
           return;
         }
@@ -547,6 +570,7 @@
     reset.addEventListener("click", () => {
       saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0 });
       resetDailyReadCount();
+      resetDailyLikeCount();
       syncDailyReadCount();
       setStatus("已清空浏览记录");
     });
