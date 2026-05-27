@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.0
+// @version      0.3.1
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -249,6 +249,7 @@
         font-weight: 700;
       }
       #linuxdo-read-only-helper .ldo-roh-header {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -283,9 +284,20 @@
         height: 100%;
         padding: 0;
         border-radius: 50%;
-        background: #f5f5f5 url("https://linux.do/favicon.ico") center / 34px 34px no-repeat;
+        background: #f5f5f5;
         color: transparent;
         font-size: 0;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-collapse::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        transform: translate(-50%, -50%);
+        background: #2e3033;
+        clip-path: polygon(50% 4%, 88% 25%, 88% 75%, 50% 96%, 12% 75%, 12% 25%);
       }
       #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-collapse::after {
         content: "展开";
@@ -305,6 +317,26 @@
       }
       #linuxdo-read-only-helper.ldo-roh-collapsed:hover .ldo-roh-collapse::after {
         opacity: 1;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header::before,
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header::after {
+        content: "";
+        position: absolute;
+        z-index: 1;
+        left: 50%;
+        top: 50%;
+        width: 18px;
+        height: 4px;
+        border-radius: 999px;
+        background: #f5f5f5;
+        transform-origin: center;
+        pointer-events: none;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header::before {
+        transform: translate(-50%, -50%) rotate(30deg) translateY(-5px);
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header::after {
+        transform: translate(-50%, -50%) rotate(-30deg) translateY(-5px);
       }
       #linuxdo-read-only-helper .ldo-roh-status {
         min-height: 22px;
