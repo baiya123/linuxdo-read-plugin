@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.2
+// @version      0.2.3
 // @description  Read latest LINUX DO topics with visible, manual controls. No likes, comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -25,6 +25,7 @@
     breakAfterTopics: 10,
     longBreakMs: 300000,
     topicsReadInBatch: 0,
+    panelCollapsed: false,
     idleCycles: 0,
     visited: [],
   };
@@ -121,31 +122,36 @@
     const panel = document.createElement("div");
     panel.id = "linuxdo-read-only-helper";
     panel.innerHTML = `
-      <div class="ldo-roh-title">LINUX DO 只读浏览</div>
-      <div class="ldo-roh-status" data-role="status">待机</div>
-      <label>阅读秒数
-        <span>
-          <input type="number" min="10" max="3600" step="5" data-role="min-read">
-          -
-          <input type="number" min="10" max="3600" step="5" data-role="max-read">
-        </span>
-      </label>
-      <label>间隔秒数
-        <span>
-          <input type="number" min="3" max="600" step="1" data-role="min-pause">
-          -
-          <input type="number" min="3" max="600" step="1" data-role="max-pause">
-        </span>
-      </label>
-      <label>读几篇休息
-        <input type="number" min="1" max="200" step="1" data-role="break-after">
-      </label>
-      <label>休息秒数
-        <input type="number" min="10" max="86400" step="10" data-role="long-break">
-      </label>
-      <div class="ldo-roh-row">
-        <button type="button" data-role="toggle"></button>
-        <button type="button" data-role="reset">清记录</button>
+      <div class="ldo-roh-header">
+        <div class="ldo-roh-title">LINUX DO 只读浏览</div>
+        <button type="button" class="ldo-roh-collapse" data-role="collapse"></button>
+      </div>
+      <div class="ldo-roh-content">
+        <div class="ldo-roh-status" data-role="status">待机</div>
+        <label>阅读秒数
+          <span>
+            <input type="number" min="10" max="3600" step="5" data-role="min-read">
+            -
+            <input type="number" min="10" max="3600" step="5" data-role="max-read">
+          </span>
+        </label>
+        <label>间隔秒数
+          <span>
+            <input type="number" min="3" max="600" step="1" data-role="min-pause">
+            -
+            <input type="number" min="3" max="600" step="1" data-role="max-pause">
+          </span>
+        </label>
+        <label>读几篇休息
+          <input type="number" min="1" max="200" step="1" data-role="break-after">
+        </label>
+        <label>休息秒数
+          <input type="number" min="10" max="86400" step="10" data-role="long-break">
+        </label>
+        <div class="ldo-roh-row">
+          <button type="button" data-role="toggle"></button>
+          <button type="button" data-role="reset">清记录</button>
+        </div>
       </div>
     `;
 
@@ -167,7 +173,29 @@
       }
       #linuxdo-read-only-helper .ldo-roh-title {
         font-weight: 700;
+      }
+      #linuxdo-read-only-helper .ldo-roh-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
         margin-bottom: 6px;
+      }
+      #linuxdo-read-only-helper .ldo-roh-collapse {
+        flex: none;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed {
+        width: auto;
+        padding: 8px;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-title,
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-content {
+        display: none;
+      }
+      #linuxdo-read-only-helper.ldo-roh-collapsed .ldo-roh-header {
+        margin-bottom: 0;
       }
       #linuxdo-read-only-helper .ldo-roh-status {
         min-height: 36px;
@@ -213,6 +241,13 @@
     document.documentElement.appendChild(style);
     document.documentElement.appendChild(panel);
     return panel;
+  }
+
+  function syncPanelVisibility() {
+    const panel = buildPanel();
+    const state = loadState();
+    panel.classList.toggle("ldo-roh-collapsed", state.panelCollapsed);
+    panel.querySelector('[data-role="collapse"]').textContent = state.panelCollapsed ? "展开" : "收起";
   }
 
   function setStatus(text) {
@@ -264,9 +299,16 @@
     const panel = buildPanel();
     const toggle = panel.querySelector('[data-role="toggle"]');
     const reset = panel.querySelector('[data-role="reset"]');
+    const collapse = panel.querySelector('[data-role="collapse"]');
     const inputs = panel.querySelectorAll("input");
 
     syncInputsFromState();
+    syncPanelVisibility();
+
+    collapse.addEventListener("click", () => {
+      saveState({ panelCollapsed: !loadState().panelCollapsed });
+      syncPanelVisibility();
+    });
 
     toggle.addEventListener("click", () => {
       const state = loadState();
