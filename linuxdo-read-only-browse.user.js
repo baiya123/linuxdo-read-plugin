@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.2.7
+// @version      0.2.8
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -31,6 +31,8 @@
     mainPostLikeThreshold: 0,
     autoLikeMainPost: false,
     autoLiked: [],
+    dailyReadDate: "",
+    dailyReadCount: 0,
     idleCycles: 0,
     visited: [],
   };
@@ -58,6 +60,13 @@
   const randomInt = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
   const isTopicPage = () => /^\/t\//.test(location.pathname);
   const isListPage = () => /^(\/|\/latest|\/new|\/top|\/categories)$/.test(location.pathname);
+
+  function todayKey() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
 
   function clampNumber(value, min, max, fallback) {
     const parsed = Number(value);
@@ -136,6 +145,23 @@
     saveState({ visited });
   }
 
+  function getDailyReadCount() {
+    const state = loadState();
+    return state.dailyReadDate === todayKey() ? state.dailyReadCount || 0 : 0;
+  }
+
+  function incrementDailyReadCount() {
+    const state = loadState();
+    const today = todayKey();
+    const dailyReadCount = state.dailyReadDate === today ? (state.dailyReadCount || 0) + 1 : 1;
+    saveState({ dailyReadDate: today, dailyReadCount });
+    return dailyReadCount;
+  }
+
+  function resetDailyReadCount() {
+    saveState({ dailyReadDate: todayKey(), dailyReadCount: 0 });
+  }
+
   function buildPanel() {
     const existing = document.getElementById("linuxdo-read-only-helper");
     if (existing) return existing;
@@ -149,6 +175,7 @@
       </div>
       <div class="ldo-roh-content">
         <div class="ldo-roh-status" data-role="status">待机</div>
+        <div class="ldo-roh-daily" data-role="daily-count">今日已读 0 篇</div>
         <div class="ldo-roh-like-hint" data-role="like-hint"></div>
         <label>阅读秒数
           <span>
@@ -226,7 +253,11 @@
         margin-bottom: 0;
       }
       #linuxdo-read-only-helper .ldo-roh-status {
-        min-height: 36px;
+        min-height: 22px;
+        opacity: 0.88;
+        margin-bottom: 4px;
+      }
+      #linuxdo-read-only-helper .ldo-roh-daily {
         opacity: 0.88;
         margin-bottom: 10px;
       }
@@ -299,6 +330,11 @@
     panel.querySelector('[data-role="collapse"]').textContent = state.panelCollapsed ? "展开" : "收起";
   }
 
+  function syncDailyReadCount() {
+    const panel = buildPanel();
+    panel.querySelector('[data-role="daily-count"]').textContent = `今日已读 ${getDailyReadCount()} 篇`;
+  }
+
   function setStatus(text) {
     const panel = buildPanel();
     const status = panel.querySelector('[data-role="status"]');
@@ -308,6 +344,7 @@
     status.textContent = text;
     toggle.textContent = state.enabled ? "停止" : "开始";
     toggle.style.background = state.enabled ? "#ffb3b3" : "#9ee493";
+    syncDailyReadCount();
   }
 
   function setLikeHint(text) {
@@ -492,6 +529,7 @@
 
     syncInputsFromState();
     syncPanelVisibility();
+    syncDailyReadCount();
 
     collapse.addEventListener("click", () => {
       saveState({ panelCollapsed: !loadState().panelCollapsed });
@@ -508,6 +546,8 @@
 
     reset.addEventListener("click", () => {
       saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0 });
+      resetDailyReadCount();
+      syncDailyReadCount();
       setStatus("已清空浏览记录");
     });
 
@@ -552,6 +592,8 @@
     if (loadState().enabled) {
       const nextState = loadState();
       const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
+      incrementDailyReadCount();
+      syncDailyReadCount();
       saveState({ topicsReadInBatch });
 
       if (topicsReadInBatch >= nextState.breakAfterTopics) {
