@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.4
+// @version      0.4.5
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -105,6 +105,21 @@
     if (unit === "m") return Math.round(number * 1000000);
     if (unit === "万") return Math.round(number * 10000);
     return Math.round(number);
+  }
+
+  function parseTopicTimelineProgress() {
+    const timeline = document.querySelector(".timeline-container, .topic-navigation");
+    if (!timeline) return null;
+
+    const text = String(timeline.textContent || "").replace(/\s+/g, " ");
+    const match = text.match(/(\d+)\s*\/\s*(\d+)/);
+    if (!match) return null;
+
+    const current = Number(match[1]);
+    const total = Number(match[2]);
+    if (!Number.isFinite(current) || !Number.isFinite(total) || total <= 0) return null;
+
+    return { current, total };
   }
 
   function normalizeTopicUrl(url) {
@@ -730,10 +745,6 @@
 
     for (let i = 0; i < steps; i += 1) {
       if (!loadState().enabled) return false;
-      if (isTopicBottomVisible()) {
-        setStatus(`已读到底 ${i}/${steps}`);
-        return true;
-      }
 
       setStatus(`阅读帖子中 ${i + 1}/${steps}`);
       window.scrollBy({
@@ -758,12 +769,12 @@
     while (loadState().enabled) {
       if (!loadState().enabled) return false;
       if (isTopicBottomVisible()) {
-        setStatus("已读到底");
+        setStatus(formatTopicBottomStatus("已读到底"));
         return true;
       }
 
       extraStep += 1;
-      setStatus(`继续下拉到底 ${extraStep}`);
+      setStatus(formatTopicBottomStatus(`继续下拉到底 ${extraStep}`));
       window.scrollBy({
         top: randomInt(420, 980),
         left: 0,
@@ -803,8 +814,20 @@
     return rect.top < window.innerHeight - bottomPadding && rect.bottom > 0;
   }
 
+  function formatTopicBottomStatus(prefix) {
+    const progress = parseTopicTimelineProgress();
+    if (!progress) return prefix;
+    return `${prefix} ${progress.current}/${progress.total}`;
+  }
+
   function isTopicBottomVisible() {
     if (!isTopicPage()) return false;
+    const progress = parseTopicTimelineProgress();
+    if (progress && progress.current >= progress.total) return true;
+
+    const doc = document.documentElement;
+    const remaining = doc.scrollHeight - (window.scrollY + window.innerHeight);
+    if (window.scrollY > window.innerHeight && remaining <= 240) return true;
 
     return [
       "#topic-footer-buttons",
@@ -812,9 +835,6 @@
       ".topic-footer-main-buttons",
       ".topic-footer",
       ".topic-above-footer-buttons-outlet",
-      ".post__topic-map",
-      ".topic-map.--op",
-      ".topic-post:last-of-type .post-controls",
     ].some((selector) => Array.from(document.querySelectorAll(selector)).some((element) => isElementVisibleInViewport(element)));
   }
 
