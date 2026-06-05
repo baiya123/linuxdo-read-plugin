@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.7
+// @version      0.3.8
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -751,10 +751,10 @@
 
   function clickTopicLink(anchor) {
     anchor.removeAttribute("target");
-    anchor.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
-    anchor.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
-    anchor.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
-    anchor.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    anchor.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true }));
+    anchor.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    anchor.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    anchor.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }
 
   async function runOnTopicPage() {
