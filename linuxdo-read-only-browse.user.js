@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.2
+// @version      0.4.3
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -19,7 +19,6 @@
   const VISITED_LIMIT = 1000;
   const DAILY_TOPIC_LIMIT = 2000;
   const LIST_REFRESH_AFTER_TOPICS = 10;
-  const TOPIC_BOTTOM_EXTRA_STEPS = 20;
   const DEFAULTS = {
     enabled: false,
     minReadMs: 25000,
@@ -248,7 +247,7 @@
           <span>
             <input type="number" min="1" max="30" step="1" data-role="min-steps">
             -
-            <input type="number" min="1" max="30" step="1" data-role="max-steps">
+            <input type="number" min="0" max="30" step="1" data-role="max-steps">
           </span>
         </label>
         <label>读几篇休息
@@ -510,7 +509,7 @@
     );
     let scrollStepsMax = positiveInt(
       panel.querySelector('[data-role="max-steps"]').value,
-      1,
+      0,
       30,
       DEFAULTS.scrollStepsMax
     );
@@ -533,7 +532,9 @@
 
     if (minReadMs > maxReadMs) [minReadMs, maxReadMs] = [maxReadMs, minReadMs];
     if (minPauseMs > maxPauseMs) [minPauseMs, maxPauseMs] = [maxPauseMs, minPauseMs];
-    if (scrollStepsMin > scrollStepsMax) [scrollStepsMin, scrollStepsMax] = [scrollStepsMax, scrollStepsMin];
+    if (scrollStepsMax !== 0 && scrollStepsMin > scrollStepsMax) {
+      [scrollStepsMin, scrollStepsMax] = [scrollStepsMax, scrollStepsMin];
+    }
 
     saveState({
       minReadMs,
@@ -723,7 +724,8 @@
   async function scrollTopicLikeReading() {
     const state = loadState();
     const totalReadMs = randomInt(state.minReadMs, state.maxReadMs);
-    const steps = randomInt(state.scrollStepsMin, state.scrollStepsMax);
+    const requireBottom = state.scrollStepsMax === 0;
+    const steps = requireBottom ? state.scrollStepsMin : randomInt(state.scrollStepsMin, state.scrollStepsMax);
     const stepDelay = Math.max(2500, Math.floor(totalReadMs / steps));
 
     for (let i = 0; i < steps; i += 1) {
@@ -747,14 +749,21 @@
       }
     }
 
-    for (let i = 0; i < TOPIC_BOTTOM_EXTRA_STEPS; i += 1) {
+    if (!requireBottom) {
+      setStatus(`完成基础滚动 ${steps}/${steps}`);
+      return true;
+    }
+
+    let extraStep = 0;
+    while (loadState().enabled) {
       if (!loadState().enabled) return false;
       if (isTopicBottomVisible()) {
         setStatus("已读到底");
         return true;
       }
 
-      setStatus(`补充下拉到底 ${i + 1}/${TOPIC_BOTTOM_EXTRA_STEPS}`);
+      extraStep += 1;
+      setStatus(`继续下拉到底 ${extraStep}`);
       window.scrollBy({
         top: randomInt(420, 980),
         left: 0,
@@ -763,7 +772,7 @@
       await sleep(randomInt(2200, 5200));
     }
 
-    return isTopicBottomVisible();
+    return false;
   }
 
   async function scrollListLikeBrowsingMore() {
@@ -838,7 +847,7 @@
           saveState({ topicsReadInBatch: 0 });
         }
       } else {
-        setStatus("未检测到底部，跳过不计已读");
+        setStatus("未完成阅读，跳过不计已读");
         await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
       }
 

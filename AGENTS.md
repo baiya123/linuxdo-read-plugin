@@ -14,7 +14,7 @@ The script injects a floating control panel on `https://linux.do/*`, browses top
 
 List refreshes are intentionally throttled: after browser-back navigation returns to the latest list, the script continues in-page and only refreshes after a batch of topics.
 
-Read completion is bottom-based. Do not increment read counters just because the configured scroll step count finished; the script should detect topic-bottom UI or near-bottom scroll position first.
+Read completion has two modes. When max scroll steps is `0`, completion is bottom-based and counters should only increment after detecting topic-bottom UI or near-bottom scroll position. Otherwise, completion follows the configured scroll step range.
 
 ## Development Rules
 
