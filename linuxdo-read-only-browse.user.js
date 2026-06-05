@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.8
+// @version      0.3.9
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -827,7 +827,15 @@
       setStatus(`点击进入：${topic.title.slice(0, 26)}`);
       clickTopicLink(topic.anchor);
       await sleep(3200);
-      if (loadState().enabled && location.href === beforeUrl) {
+      if (!loadState().enabled) return;
+
+      if (location.href !== beforeUrl) {
+        setStatus("已进入话题，重新载入阅读流程");
+        location.reload();
+        return;
+      }
+
+      if (location.href === beforeUrl) {
         setStatus("点击未跳转，兜底打开话题");
         location.assign(topic.url);
       }
