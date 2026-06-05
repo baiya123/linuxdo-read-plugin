@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.0
+// @version      0.4.1
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -18,6 +18,7 @@
   const STORAGE_KEY = "linuxdo_read_only_browse_state";
   const VISITED_LIMIT = 1000;
   const DAILY_TOPIC_LIMIT = 2000;
+  const LIST_REFRESH_AFTER_TOPICS = 10;
   const DEFAULTS = {
     enabled: false,
     minReadMs: 25000,
@@ -29,6 +30,7 @@
     breakAfterTopics: 10,
     longBreakMs: 300000,
     topicsReadInBatch: 0,
+    topicsReadSinceListRefresh: 0,
     panelCollapsed: false,
     mainPostLikeThreshold: 0,
     autoLikeMainPost: false,
@@ -685,7 +687,7 @@
       const state = loadState();
       saveInputsToState();
       const enabled = !state.enabled;
-      saveState({ enabled, idleCycles: 0, topicsReadInBatch: 0 });
+      saveState({ enabled, idleCycles: 0, topicsReadInBatch: 0, topicsReadSinceListRefresh: 0 });
       setStatus(enabled ? "已启动，前往最新贴" : "已停止");
       window.setTimeout(() => {
         if (enabled) {
@@ -698,7 +700,7 @@
     });
 
     reset.addEventListener("click", () => {
-      saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0 });
+      saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0, topicsReadSinceListRefresh: 0 });
       resetDailyReadCount();
       resetDailyLikeCount();
       resetDailyTopicCount();
@@ -771,9 +773,10 @@
     if (loadState().enabled) {
       const nextState = loadState();
       const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
+      const topicsReadSinceListRefresh = (nextState.topicsReadSinceListRefresh || 0) + 1;
       incrementDailyReadCount();
       syncDailyReadCount();
-      saveState({ topicsReadInBatch });
+      saveState({ topicsReadInBatch, topicsReadSinceListRefresh });
 
       if (topicsReadInBatch >= nextState.breakAfterTopics) {
         setStatus(`已读 ${topicsReadInBatch} 篇，休息中`);
@@ -790,7 +793,19 @@
           if (!loadState().enabled) return;
 
           if (location.href !== beforeUrl && isListPage()) {
-            location.reload();
+            if (loadState().topicsReadSinceListRefresh >= LIST_REFRESH_AFTER_TOPICS) {
+              saveState({ topicsReadSinceListRefresh: 0 });
+              setStatus("已读 10 篇，刷新最新列表");
+              location.reload();
+              return;
+            }
+
+            setStatus("已返回列表，继续找下一篇");
+            runOnListPage().catch((error) => {
+              console.error("[LINUX DO Read-Only Browse Helper]", error);
+              setStatus("脚本遇到错误，已停止");
+              saveState({ enabled: false });
+            });
             return;
           }
 

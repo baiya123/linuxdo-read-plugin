@@ -12,6 +12,8 @@ This repository contains a Tampermonkey/Violentmonkey/Greasemonkey userscript fo
 
 The script injects a floating control panel on `https://linux.do/*`, browses topics, tracks daily read/like counts, supports configurable breaks, and can optionally assist with main-post likes when the user enables it.
 
+List refreshes are intentionally throttled: after browser-back navigation returns to the latest list, the script continues in-page and only refreshes after a batch of topics.
+
 ## Development Rules
 
 - Keep the project dependency-free unless there is a strong reason.
