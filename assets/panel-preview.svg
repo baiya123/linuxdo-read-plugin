@@ -28,17 +28,20 @@
   <rect x="239" y="216" width="66" height="34" rx="8" fill="#FFFFFF"/>
   <text x="254" y="239" fill="#111111" font-family="Arial, sans-serif" font-size="18">14</text>
 
-  <text x="18" y="299" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">读几篇休息</text>
+  <text x="18" y="299" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">滚动步数</text>
+  <rect x="153" y="271" width="67" height="34" rx="8" fill="#FFFFFF"/>
+  <text x="168" y="294" fill="#111111" font-family="Arial, sans-serif" font-size="18">3</text>
+  <text x="225" y="297" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="21">-</text>
   <rect x="239" y="271" width="66" height="34" rx="8" fill="#FFFFFF"/>
-  <text x="254" y="294" fill="#111111" font-family="Arial, sans-serif" font-size="18">10</text>
+  <text x="254" y="294" fill="#111111" font-family="Arial, sans-serif" font-size="18">8</text>
 
-  <text x="18" y="352" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">休息秒数</text>
+  <text x="18" y="352" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">读几篇休息</text>
   <rect x="239" y="324" width="66" height="34" rx="8" fill="#FFFFFF"/>
-  <text x="254" y="347" fill="#111111" font-family="Arial, sans-serif" font-size="18">300</text>
+  <text x="254" y="347" fill="#111111" font-family="Arial, sans-serif" font-size="18">10</text>
 
-  <text x="18" y="405" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">主帖赞阈值</text>
+  <text x="18" y="405" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">休息秒数</text>
   <rect x="239" y="377" width="66" height="34" rx="8" fill="#FFFFFF"/>
-  <text x="254" y="400" fill="#111111" font-family="Arial, sans-serif" font-size="18">100</text>
+  <text x="254" y="400" fill="#111111" font-family="Arial, sans-serif" font-size="18">300</text>
 
   <text x="18" y="451" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700">自动点赞</text>
   <rect x="281" y="434" width="17" height="17" rx="2" fill="#16A9E8"/>

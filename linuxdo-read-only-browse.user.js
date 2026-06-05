@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.2
+// @version      0.3.3
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -238,6 +238,13 @@
             <input type="number" min="3" max="600" step="1" data-role="min-pause">
             -
             <input type="number" min="3" max="600" step="1" data-role="max-pause">
+          </span>
+        </label>
+        <label>滚动步数
+          <span>
+            <input type="number" min="1" max="30" step="1" data-role="min-steps">
+            -
+            <input type="number" min="1" max="30" step="1" data-role="max-steps">
           </span>
         </label>
         <label>读几篇休息
@@ -477,6 +484,8 @@
     panel.querySelector('[data-role="max-read"]').value = Math.round(state.maxReadMs / 1000);
     panel.querySelector('[data-role="min-pause"]').value = Math.round(state.minPauseMs / 1000);
     panel.querySelector('[data-role="max-pause"]').value = Math.round(state.maxPauseMs / 1000);
+    panel.querySelector('[data-role="min-steps"]').value = state.scrollStepsMin;
+    panel.querySelector('[data-role="max-steps"]').value = state.scrollStepsMax;
     panel.querySelector('[data-role="break-after"]').value = state.breakAfterTopics;
     panel.querySelector('[data-role="long-break"]').value = Math.round(state.longBreakMs / 1000);
     panel.querySelector('[data-role="like-threshold"]').value = state.mainPostLikeThreshold;
@@ -489,6 +498,18 @@
     let maxReadMs = secondsToMs(panel.querySelector('[data-role="max-read"]').value, DEFAULTS.maxReadMs);
     let minPauseMs = secondsToMs(panel.querySelector('[data-role="min-pause"]').value, DEFAULTS.minPauseMs);
     let maxPauseMs = secondsToMs(panel.querySelector('[data-role="max-pause"]').value, DEFAULTS.maxPauseMs);
+    let scrollStepsMin = positiveInt(
+      panel.querySelector('[data-role="min-steps"]').value,
+      1,
+      30,
+      DEFAULTS.scrollStepsMin
+    );
+    let scrollStepsMax = positiveInt(
+      panel.querySelector('[data-role="max-steps"]').value,
+      1,
+      30,
+      DEFAULTS.scrollStepsMax
+    );
     const breakAfterTopics = positiveInt(
       panel.querySelector('[data-role="break-after"]').value,
       1,
@@ -508,12 +529,15 @@
 
     if (minReadMs > maxReadMs) [minReadMs, maxReadMs] = [maxReadMs, minReadMs];
     if (minPauseMs > maxPauseMs) [minPauseMs, maxPauseMs] = [maxPauseMs, minPauseMs];
+    if (scrollStepsMin > scrollStepsMax) [scrollStepsMin, scrollStepsMax] = [scrollStepsMax, scrollStepsMin];
 
     saveState({
       minReadMs,
       maxReadMs,
       minPauseMs,
       maxPauseMs,
+      scrollStepsMin,
+      scrollStepsMax,
       breakAfterTopics,
       longBreakMs,
       mainPostLikeThreshold,
