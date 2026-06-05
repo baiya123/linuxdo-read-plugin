@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.1
+// @version      0.4.2
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -19,6 +19,7 @@
   const VISITED_LIMIT = 1000;
   const DAILY_TOPIC_LIMIT = 2000;
   const LIST_REFRESH_AFTER_TOPICS = 10;
+  const TOPIC_BOTTOM_EXTRA_STEPS = 20;
   const DEFAULTS = {
     enabled: false,
     minReadMs: 25000,
@@ -726,7 +727,12 @@
     const stepDelay = Math.max(2500, Math.floor(totalReadMs / steps));
 
     for (let i = 0; i < steps; i += 1) {
-      if (!loadState().enabled) return;
+      if (!loadState().enabled) return false;
+      if (isTopicBottomVisible()) {
+        setStatus(`已读到底 ${i}/${steps}`);
+        return true;
+      }
+
       setStatus(`阅读帖子中 ${i + 1}/${steps}`);
       window.scrollBy({
         top: randomInt(260, 760),
@@ -734,7 +740,30 @@
         behavior: "smooth",
       });
       await sleep(stepDelay + randomInt(-900, 1400));
+
+      if (isTopicBottomVisible()) {
+        setStatus(`已读到底 ${i + 1}/${steps}`);
+        return true;
+      }
     }
+
+    for (let i = 0; i < TOPIC_BOTTOM_EXTRA_STEPS; i += 1) {
+      if (!loadState().enabled) return false;
+      if (isTopicBottomVisible()) {
+        setStatus("已读到底");
+        return true;
+      }
+
+      setStatus(`补充下拉到底 ${i + 1}/${TOPIC_BOTTOM_EXTRA_STEPS}`);
+      window.scrollBy({
+        top: randomInt(420, 980),
+        left: 0,
+        behavior: "smooth",
+      });
+      await sleep(randomInt(2200, 5200));
+    }
+
+    return isTopicBottomVisible();
   }
 
   async function scrollListLikeBrowsingMore() {
@@ -759,6 +788,29 @@
     anchor.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }
 
+  function isElementVisibleInViewport(element, bottomPadding = 80) {
+    if (!element) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.top < window.innerHeight - bottomPadding && rect.bottom > 0;
+  }
+
+  function getRemainingScrollPx() {
+    const doc = document.documentElement;
+    return Math.max(0, doc.scrollHeight - (window.scrollY + window.innerHeight));
+  }
+
+  function isTopicBottomVisible() {
+    if (!isTopicPage()) return false;
+    if (getRemainingScrollPx() <= 260) return true;
+
+    return [
+      "#topic-footer-buttons",
+      ".topic-footer-buttons",
+      ".topic-footer-main-buttons",
+      ".topic-footer",
+    ].some((selector) => Array.from(document.querySelectorAll(selector)).some((element) => isElementVisibleInViewport(element)));
+  }
+
   async function runOnTopicPage() {
     rememberVisited(location.href);
     rememberDailyTopic(location.href);
@@ -768,21 +820,26 @@
     await updateLikeAssist();
     setStatus("停留阅读中");
     await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
-    await scrollTopicLikeReading();
+    const completed = await scrollTopicLikeReading();
 
     if (loadState().enabled) {
-      const nextState = loadState();
-      const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
-      const topicsReadSinceListRefresh = (nextState.topicsReadSinceListRefresh || 0) + 1;
-      incrementDailyReadCount();
-      syncDailyReadCount();
-      saveState({ topicsReadInBatch, topicsReadSinceListRefresh });
+      if (completed) {
+        const nextState = loadState();
+        const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
+        const topicsReadSinceListRefresh = (nextState.topicsReadSinceListRefresh || 0) + 1;
+        incrementDailyReadCount();
+        syncDailyReadCount();
+        saveState({ topicsReadInBatch, topicsReadSinceListRefresh });
 
-      if (topicsReadInBatch >= nextState.breakAfterTopics) {
-        setStatus(`已读 ${topicsReadInBatch} 篇，休息中`);
-        await sleep(nextState.longBreakMs);
-        if (!loadState().enabled) return;
-        saveState({ topicsReadInBatch: 0 });
+        if (topicsReadInBatch >= nextState.breakAfterTopics) {
+          setStatus(`已读 ${topicsReadInBatch} 篇，休息中`);
+          await sleep(nextState.longBreakMs);
+          if (!loadState().enabled) return;
+          saveState({ topicsReadInBatch: 0 });
+        }
+      } else {
+        setStatus("未检测到底部，跳过不计已读");
+        await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
       }
 
       setStatus("返回最新列表");
