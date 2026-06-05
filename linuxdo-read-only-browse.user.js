@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.3
+// @version      0.3.4
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -125,6 +125,7 @@
 
     return anchors
       .map((anchor) => ({
+        anchor,
         title: (anchor.textContent || "").trim(),
         url: normalizeTopicUrl(anchor.href),
       }))
@@ -752,6 +753,11 @@
       }
 
       setStatus("返回最新列表");
+      if (history.length > 1) {
+        history.back();
+        return;
+      }
+
       location.href = "https://linux.do/latest";
     }
   }
@@ -788,7 +794,13 @@
     await sleep(randomInt(loadState().minPauseMs, loadState().maxPauseMs));
     if (loadState().enabled) {
       rememberVisited(topic.url);
-      location.href = topic.url;
+      const beforeUrl = location.href;
+      topic.anchor.removeAttribute("target");
+      topic.anchor.click();
+      await sleep(2500);
+      if (loadState().enabled && location.href === beforeUrl) {
+        location.href = topic.url;
+      }
     }
   }
 
