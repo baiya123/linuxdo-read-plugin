@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.3
+// @version      0.4.4
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -803,20 +803,18 @@
     return rect.top < window.innerHeight - bottomPadding && rect.bottom > 0;
   }
 
-  function getRemainingScrollPx() {
-    const doc = document.documentElement;
-    return Math.max(0, doc.scrollHeight - (window.scrollY + window.innerHeight));
-  }
-
   function isTopicBottomVisible() {
     if (!isTopicPage()) return false;
-    if (getRemainingScrollPx() <= 260) return true;
 
     return [
       "#topic-footer-buttons",
       ".topic-footer-buttons",
       ".topic-footer-main-buttons",
       ".topic-footer",
+      ".topic-above-footer-buttons-outlet",
+      ".post__topic-map",
+      ".topic-map.--op",
+      ".topic-post:last-of-type .post-controls",
     ].some((selector) => Array.from(document.querySelectorAll(selector)).some((element) => isElementVisibleInViewport(element)));
   }
 
