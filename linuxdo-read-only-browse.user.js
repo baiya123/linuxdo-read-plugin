@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.1
+// @version      0.3.2
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -16,6 +16,8 @@
   "use strict";
 
   const STORAGE_KEY = "linuxdo_read_only_browse_state";
+  const VISITED_LIMIT = 1000;
+  const DAILY_TOPIC_LIMIT = 2000;
   const DEFAULTS = {
     enabled: false,
     minReadMs: 25000,
@@ -35,6 +37,9 @@
     dailyReadCount: 0,
     dailyLikeDate: "",
     dailyLikeCount: 0,
+    dailyTopicDate: "",
+    dailyTopicCount: 0,
+    dailyTopics: [],
     idleCycles: 0,
     visited: [],
   };
@@ -143,7 +148,7 @@
     const state = loadState();
     const normalized = normalizeTopicUrl(url);
     if (!normalized) return;
-    const visited = [normalized, ...(state.visited || []).filter((item) => item !== normalized)].slice(0, 200);
+    const visited = [normalized, ...(state.visited || []).filter((item) => item !== normalized)].slice(0, VISITED_LIMIT);
     saveState({ visited });
   }
 
@@ -181,6 +186,31 @@
     saveState({ dailyLikeDate: todayKey(), dailyLikeCount: 0 });
   }
 
+  function getDailyTopicCount() {
+    const state = loadState();
+    return state.dailyTopicDate === todayKey() ? state.dailyTopicCount || 0 : 0;
+  }
+
+  function rememberDailyTopic(url) {
+    const normalized = normalizeTopicUrl(url);
+    if (!normalized) return getDailyTopicCount();
+
+    const state = loadState();
+    const today = todayKey();
+    const dailyTopics = state.dailyTopicDate === today ? state.dailyTopics || [] : [];
+
+    if (dailyTopics.includes(normalized)) return state.dailyTopicDate === today ? state.dailyTopicCount || 0 : 0;
+
+    const nextDailyTopics = [normalized, ...dailyTopics].slice(0, DAILY_TOPIC_LIMIT);
+    const dailyTopicCount = state.dailyTopicDate === today ? (state.dailyTopicCount || 0) + 1 : 1;
+    saveState({ dailyTopicDate: today, dailyTopicCount, dailyTopics: nextDailyTopics });
+    return dailyTopicCount;
+  }
+
+  function resetDailyTopicCount() {
+    saveState({ dailyTopicDate: todayKey(), dailyTopicCount: 0, dailyTopics: [] });
+  }
+
   function buildPanel() {
     const existing = document.getElementById("linuxdo-read-only-helper");
     if (existing) return existing;
@@ -194,7 +224,7 @@
       </div>
       <div class="ldo-roh-content">
         <div class="ldo-roh-status" data-role="status">待机</div>
-        <div class="ldo-roh-daily" data-role="daily-count">今日已读 0 篇 / 今日点赞 0 次</div>
+        <div class="ldo-roh-daily" data-role="daily-count">今日已读 0 篇 / 新话题 0 个 / 点赞 0 次</div>
         <div class="ldo-roh-like-hint" data-role="like-hint"></div>
         <label>阅读秒数
           <span>
@@ -420,7 +450,7 @@
     const panel = buildPanel();
     panel.querySelector(
       '[data-role="daily-count"]'
-    ).textContent = `今日已读 ${getDailyReadCount()} 篇 / 今日点赞 ${getDailyLikeCount()} 次`;
+    ).textContent = `今日已读 ${getDailyReadCount()} 篇 / 新话题 ${getDailyTopicCount()} 个 / 点赞 ${getDailyLikeCount()} 次`;
   }
 
   function setStatus(text) {
@@ -638,6 +668,7 @@
       saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0 });
       resetDailyReadCount();
       resetDailyLikeCount();
+      resetDailyTopicCount();
       syncDailyReadCount();
       setStatus("已清空浏览记录");
     });
@@ -673,6 +704,8 @@
 
   async function runOnTopicPage() {
     rememberVisited(location.href);
+    rememberDailyTopic(location.href);
+    syncDailyReadCount();
     saveState({ idleCycles: 0 });
     const state = loadState();
     await updateLikeAssist();
@@ -713,9 +746,11 @@
 
       if (!loadState().enabled) return;
       if (idleCycles >= 3) {
-        saveState({ visited: [], idleCycles: 0 });
-        setStatus("可见列表读完，重置记录继续");
+        saveState({ idleCycles: 0 });
+        setStatus("可见列表读完，继续加载更多话题");
         await sleep(randomInt(4000, 9000));
+        window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: "smooth" });
+        await sleep(randomInt(5000, 12000));
         location.href = "https://linux.do/latest";
         return;
       }

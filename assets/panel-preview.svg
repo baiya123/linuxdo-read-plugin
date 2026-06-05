@@ -9,7 +9,7 @@
   <path d="M274 67L282 72L290 67M282 72V83" stroke="#F5F5F5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <text x="18" y="70" fill="#FFFFFF" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="17">阅读帖子中 2/7</text>
-  <text x="18" y="94" fill="#FFFFFF" opacity="0.88" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="15">今日已读 12 篇 / 今日点赞 4 次</text>
+  <text x="18" y="94" fill="#FFFFFF" opacity="0.88" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13">今日已读 12 篇 / 新话题 9 个 / 点赞 4 次</text>
 
   <rect x="18" y="113" width="287" height="38" rx="8" fill="#57513C"/>
   <text x="30" y="137" fill="#FFE6A3" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="17">主帖 3 赞，未达到阈值</text>
