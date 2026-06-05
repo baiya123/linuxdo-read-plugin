@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.5
+// @version      0.3.6
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -684,9 +684,17 @@
     toggle.addEventListener("click", () => {
       const state = loadState();
       saveInputsToState();
-      saveState({ enabled: !state.enabled, idleCycles: 0, topicsReadInBatch: 0 });
-      setStatus(!state.enabled ? "已启动，准备浏览" : "已停止");
-      window.setTimeout(() => location.reload(), 600);
+      const enabled = !state.enabled;
+      saveState({ enabled, idleCycles: 0, topicsReadInBatch: 0 });
+      setStatus(enabled ? "已启动，前往最新贴" : "已停止");
+      window.setTimeout(() => {
+        if (enabled) {
+          location.href = "https://linux.do/latest";
+          return;
+        }
+
+        location.reload();
+      }, 600);
     });
 
     reset.addEventListener("click", () => {
