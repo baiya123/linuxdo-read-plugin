@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.4
+// @version      0.3.5
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -727,6 +727,20 @@
     }
   }
 
+  async function scrollListLikeBrowsingMore() {
+    const steps = randomInt(2, 5);
+    for (let i = 0; i < steps; i += 1) {
+      if (!loadState().enabled) return;
+      setStatus(`列表下拉找新话题 ${i + 1}/${steps}`);
+      window.scrollBy({
+        top: randomInt(480, 1250),
+        left: 0,
+        behavior: "smooth",
+      });
+      await sleep(randomInt(1800, 5200));
+    }
+  }
+
   async function runOnTopicPage() {
     rememberVisited(location.href);
     rememberDailyTopic(location.href);
@@ -771,7 +785,7 @@
       const idleCycles = (state.idleCycles || 0) + 1;
       saveState({ idleCycles });
       setStatus("未找到未读帖子，向下找一找");
-      window.scrollBy({ top: randomInt(700, 1400), left: 0, behavior: "smooth" });
+      window.scrollBy({ top: randomInt(650, 1600), left: 0, behavior: "smooth" });
       await sleep(randomInt(9000, 22000));
 
       if (!loadState().enabled) return;
@@ -779,8 +793,7 @@
         saveState({ idleCycles: 0 });
         setStatus("可见列表读完，继续加载更多话题");
         await sleep(randomInt(4000, 9000));
-        window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: "smooth" });
-        await sleep(randomInt(5000, 12000));
+        await scrollListLikeBrowsingMore();
         location.href = "https://linux.do/latest";
         return;
       }
