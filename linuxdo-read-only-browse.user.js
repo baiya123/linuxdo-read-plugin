@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.3.6
+// @version      0.3.7
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -749,6 +749,14 @@
     }
   }
 
+  function clickTopicLink(anchor) {
+    anchor.removeAttribute("target");
+    anchor.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
+    anchor.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+    anchor.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+    anchor.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  }
+
   async function runOnTopicPage() {
     rememberVisited(location.href);
     rememberDailyTopic(location.href);
@@ -816,11 +824,12 @@
     if (loadState().enabled) {
       rememberVisited(topic.url);
       const beforeUrl = location.href;
-      topic.anchor.removeAttribute("target");
-      topic.anchor.click();
-      await sleep(2500);
+      setStatus(`点击进入：${topic.title.slice(0, 26)}`);
+      clickTopicLink(topic.anchor);
+      await sleep(3200);
       if (loadState().enabled && location.href === beforeUrl) {
-        location.href = topic.url;
+        setStatus("点击未跳转，兜底打开话题");
+        location.assign(topic.url);
       }
     }
   }
