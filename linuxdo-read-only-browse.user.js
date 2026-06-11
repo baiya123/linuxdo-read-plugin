@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO Read-Only Browse Helper
 // @namespace    https://linux.do/
-// @version      0.4.5
+// @version      0.4.6
 // @description  Read latest LINUX DO topics with visible, manual controls and optional assistive main-post likes. No comments, bookmarks, or other interactions.
 // @author       Codex
 // @match        https://linux.do/*
@@ -31,6 +31,10 @@
     longBreakMs: 300000,
     topicsReadInBatch: 0,
     topicsReadSinceListRefresh: 0,
+    maxRunTopics: 0,
+    maxRunMinutes: 0,
+    runStartedAt: 0,
+    runCompletedTopics: 0,
     panelCollapsed: false,
     mainPostLikeThreshold: 0,
     autoLikeMainPost: false,
@@ -89,6 +93,10 @@
 
   function positiveInt(value, min, max, fallback) {
     return Math.round(clampNumber(value, min, max, fallback));
+  }
+
+  function formatElapsedMinutes(ms) {
+    return Math.max(0, Math.floor(ms / 60000));
   }
 
   function parseCompactNumber(text) {
@@ -270,6 +278,12 @@
         </label>
         <label>休息秒数
           <input type="number" min="10" max="86400" step="10" data-role="long-break">
+        </label>
+        <label>最大帖子
+          <input type="number" min="0" max="10000" step="1" data-role="max-run-topics">
+        </label>
+        <label>最长分钟
+          <input type="number" min="0" max="10080" step="1" data-role="max-run-minutes">
         </label>
         <label>主帖赞阈值
           <input type="number" min="0" max="1000000" step="1" data-role="like-threshold">
@@ -473,9 +487,10 @@
 
   function syncDailyReadCount() {
     const panel = buildPanel();
+    const runSummary = formatRunSummary(loadState());
     panel.querySelector(
       '[data-role="daily-count"]'
-    ).textContent = `今日已读 ${getDailyReadCount()} 篇 / 新话题 ${getDailyTopicCount()} 个 / 点赞 ${getDailyLikeCount()} 次`;
+    ).textContent = `今日已读 ${getDailyReadCount()} 篇 / 新话题 ${getDailyTopicCount()} 个 / 点赞 ${getDailyLikeCount()} 次${runSummary}`;
   }
 
   function setStatus(text) {
@@ -495,6 +510,53 @@
     hint.textContent = text;
   }
 
+  function formatRunSummary(state) {
+    const parts = [];
+    if (state.maxRunTopics > 0) {
+      parts.push(`本轮 ${state.runCompletedTopics || 0}/${state.maxRunTopics} 篇`);
+    }
+    if (state.maxRunMinutes > 0) {
+      const elapsed = state.runStartedAt ? formatElapsedMinutes(Date.now() - state.runStartedAt) : 0;
+      parts.push(`${elapsed}/${state.maxRunMinutes} 分`);
+    }
+
+    return parts.length ? ` / ${parts.join(" / ")}` : "";
+  }
+
+  function getRunLimitReason(state = loadState()) {
+    if (!state.enabled) return "";
+    if (state.maxRunTopics > 0 && (state.runCompletedTopics || 0) >= state.maxRunTopics) {
+      return `已读满本轮 ${state.maxRunTopics} 篇，自动停止`;
+    }
+    if (state.maxRunMinutes > 0 && state.runStartedAt > 0) {
+      const elapsedMs = Date.now() - state.runStartedAt;
+      if (elapsedMs >= state.maxRunMinutes * 60000) {
+        return `本轮运行 ${state.maxRunMinutes} 分钟，自动停止`;
+      }
+    }
+
+    return "";
+  }
+
+  function stopIfRunLimitReached() {
+    const reason = getRunLimitReason();
+    if (!reason) return false;
+
+    saveState({ enabled: false });
+    setStatus(reason);
+    return true;
+  }
+
+  async function sleepWithRunLimit(ms) {
+    const endAt = Date.now() + Math.max(0, ms);
+    while (Date.now() < endAt) {
+      if (stopIfRunLimitReached() || !loadState().enabled) return false;
+      await sleep(Math.min(1000, endAt - Date.now()));
+    }
+
+    return !(stopIfRunLimitReached() || !loadState().enabled);
+  }
+
   function syncInputsFromState() {
     const panel = buildPanel();
     const state = loadState();
@@ -506,6 +568,8 @@
     panel.querySelector('[data-role="max-steps"]').value = state.scrollStepsMax;
     panel.querySelector('[data-role="break-after"]').value = state.breakAfterTopics;
     panel.querySelector('[data-role="long-break"]').value = Math.round(state.longBreakMs / 1000);
+    panel.querySelector('[data-role="max-run-topics"]').value = state.maxRunTopics;
+    panel.querySelector('[data-role="max-run-minutes"]').value = state.maxRunMinutes;
     panel.querySelector('[data-role="like-threshold"]').value = state.mainPostLikeThreshold;
     panel.querySelector('[data-role="auto-like"]').checked = state.autoLikeMainPost;
   }
@@ -537,6 +601,18 @@
     const longBreakMs =
       positiveInt(panel.querySelector('[data-role="long-break"]').value, 10, 86400, DEFAULTS.longBreakMs / 1000) *
       1000;
+    const maxRunTopics = positiveInt(
+      panel.querySelector('[data-role="max-run-topics"]').value,
+      0,
+      10000,
+      DEFAULTS.maxRunTopics
+    );
+    const maxRunMinutes = positiveInt(
+      panel.querySelector('[data-role="max-run-minutes"]').value,
+      0,
+      10080,
+      DEFAULTS.maxRunMinutes
+    );
     const mainPostLikeThreshold = positiveInt(
       panel.querySelector('[data-role="like-threshold"]').value,
       0,
@@ -560,6 +636,8 @@
       scrollStepsMax,
       breakAfterTopics,
       longBreakMs,
+      maxRunTopics,
+      maxRunMinutes,
       mainPostLikeThreshold,
       autoLikeMainPost,
     });
@@ -701,10 +779,16 @@
     });
 
     toggle.addEventListener("click", () => {
-      const state = loadState();
       saveInputsToState();
-      const enabled = !state.enabled;
-      saveState({ enabled, idleCycles: 0, topicsReadInBatch: 0, topicsReadSinceListRefresh: 0 });
+      const enabled = !loadState().enabled;
+      saveState({
+        enabled,
+        idleCycles: 0,
+        topicsReadInBatch: 0,
+        topicsReadSinceListRefresh: 0,
+        runStartedAt: enabled ? Date.now() : 0,
+        runCompletedTopics: enabled ? 0 : loadState().runCompletedTopics,
+      });
       setStatus(enabled ? "已启动，前往最新贴" : "已停止");
       window.setTimeout(() => {
         if (enabled) {
@@ -717,7 +801,15 @@
     });
 
     reset.addEventListener("click", () => {
-      saveState({ visited: [], autoLiked: [], idleCycles: 0, topicsReadInBatch: 0, topicsReadSinceListRefresh: 0 });
+      saveState({
+        visited: [],
+        autoLiked: [],
+        idleCycles: 0,
+        topicsReadInBatch: 0,
+        topicsReadSinceListRefresh: 0,
+        runStartedAt: 0,
+        runCompletedTopics: 0,
+      });
       resetDailyReadCount();
       resetDailyLikeCount();
       resetDailyTopicCount();
@@ -728,6 +820,7 @@
     inputs.forEach((input) => {
       input.addEventListener("change", () => {
         saveInputsToState();
+        if (stopIfRunLimitReached()) return;
         setStatus(loadState().enabled ? "设置已保存，继续运行" : "设置已保存");
         updateLikeAssist();
       });
@@ -752,7 +845,7 @@
         left: 0,
         behavior: "smooth",
       });
-      await sleep(stepDelay + randomInt(-900, 1400));
+      if (!(await sleepWithRunLimit(stepDelay + randomInt(-900, 1400)))) return false;
 
       if (isTopicBottomVisible()) {
         setStatus(`已读到底 ${i + 1}/${steps}`);
@@ -780,7 +873,7 @@
         left: 0,
         behavior: "smooth",
       });
-      await sleep(randomInt(2200, 5200));
+      if (!(await sleepWithRunLimit(randomInt(2200, 5200)))) return false;
     }
 
     return false;
@@ -796,7 +889,7 @@
         left: 0,
         behavior: "smooth",
       });
-      await sleep(randomInt(1800, 5200));
+      if (!(await sleepWithRunLimit(randomInt(1800, 5200)))) return;
     }
   }
 
@@ -839,6 +932,7 @@
   }
 
   async function runOnTopicPage() {
+    if (stopIfRunLimitReached()) return;
     rememberVisited(location.href);
     rememberDailyTopic(location.href);
     syncDailyReadCount();
@@ -846,7 +940,7 @@
     const state = loadState();
     await updateLikeAssist();
     setStatus("停留阅读中");
-    await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
+    if (!(await sleepWithRunLimit(randomInt(state.minPauseMs, state.maxPauseMs)))) return;
     const completed = await scrollTopicLikeReading();
 
     if (loadState().enabled) {
@@ -854,19 +948,23 @@
         const nextState = loadState();
         const topicsReadInBatch = (nextState.topicsReadInBatch || 0) + 1;
         const topicsReadSinceListRefresh = (nextState.topicsReadSinceListRefresh || 0) + 1;
+        const runCompletedTopics = (nextState.runCompletedTopics || 0) + 1;
         incrementDailyReadCount();
         syncDailyReadCount();
-        saveState({ topicsReadInBatch, topicsReadSinceListRefresh });
+        saveState({ topicsReadInBatch, topicsReadSinceListRefresh, runCompletedTopics });
+        syncDailyReadCount();
+
+        if (stopIfRunLimitReached()) return;
 
         if (topicsReadInBatch >= nextState.breakAfterTopics) {
           setStatus(`已读 ${topicsReadInBatch} 篇，休息中`);
-          await sleep(nextState.longBreakMs);
+          if (!(await sleepWithRunLimit(nextState.longBreakMs))) return;
           if (!loadState().enabled) return;
           saveState({ topicsReadInBatch: 0 });
         }
       } else {
         setStatus("未完成阅读，跳过不计已读");
-        await sleep(randomInt(state.minPauseMs, state.maxPauseMs));
+        await sleepWithRunLimit(randomInt(state.minPauseMs, state.maxPauseMs));
       }
 
       setStatus("返回最新列表");
@@ -875,6 +973,7 @@
         history.back();
         window.setTimeout(() => {
           if (!loadState().enabled) return;
+          if (stopIfRunLimitReached()) return;
 
           if (location.href !== beforeUrl && isListPage()) {
             if (loadState().topicsReadSinceListRefresh >= LIST_REFRESH_AFTER_TOPICS) {
@@ -905,7 +1004,9 @@
   }
 
   async function runOnListPage() {
-    await sleep(randomInt(2000, 5000));
+    if (stopIfRunLimitReached()) return;
+    if (!(await sleepWithRunLimit(randomInt(2000, 5000)))) return;
+    if (stopIfRunLimitReached()) return;
     const topic = chooseNextTopic();
 
     if (!topic) {
@@ -914,14 +1015,15 @@
       saveState({ idleCycles });
       setStatus("未找到未读帖子，向下找一找");
       window.scrollBy({ top: randomInt(650, 1600), left: 0, behavior: "smooth" });
-      await sleep(randomInt(9000, 22000));
+      if (!(await sleepWithRunLimit(randomInt(9000, 22000)))) return;
 
       if (!loadState().enabled) return;
       if (idleCycles >= 3) {
         saveState({ idleCycles: 0 });
         setStatus("可见列表读完，继续加载更多话题");
-        await sleep(randomInt(4000, 9000));
+        if (!(await sleepWithRunLimit(randomInt(4000, 9000)))) return;
         await scrollListLikeBrowsingMore();
+        if (!loadState().enabled || stopIfRunLimitReached()) return;
         location.href = "https://linux.do/latest";
         return;
       }
@@ -932,13 +1034,13 @@
 
     saveState({ idleCycles: 0 });
     setStatus(`准备打开：${topic.title.slice(0, 26)}`);
-    await sleep(randomInt(loadState().minPauseMs, loadState().maxPauseMs));
-    if (loadState().enabled) {
+    if (!(await sleepWithRunLimit(randomInt(loadState().minPauseMs, loadState().maxPauseMs)))) return;
+    if (loadState().enabled && !stopIfRunLimitReached()) {
       rememberVisited(topic.url);
       const beforeUrl = location.href;
       setStatus(`点击进入：${topic.title.slice(0, 26)}`);
       clickTopicLink(topic.anchor);
-      await sleep(3200);
+      if (!(await sleepWithRunLimit(3200))) return;
       if (!loadState().enabled) return;
 
       if (location.href !== beforeUrl) {
@@ -959,6 +1061,8 @@
     const state = loadState();
     await updateLikeAssist();
     if (!state.enabled) return;
+    if (!state.runStartedAt) saveState({ runStartedAt: Date.now(), runCompletedTopics: state.runCompletedTopics || 0 });
+    if (stopIfRunLimitReached()) return;
 
     if (isTopicPage()) {
       await runOnTopicPage();
@@ -967,7 +1071,7 @@
 
     if (!isListPage()) {
       setStatus("前往最新列表");
-      await sleep(randomInt(2000, 5000));
+      if (!(await sleepWithRunLimit(randomInt(2000, 5000)))) return;
       if (loadState().enabled) location.href = "https://linux.do/latest";
       return;
     }
